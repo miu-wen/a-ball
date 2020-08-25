@@ -1,0 +1,226 @@
+<style>
+ #cas{
+            display: block;
+            border:1px solid;
+            margin:auto;
+        }
+</style>
+<body style="background-color:#000">
+<div>
+    <canvas id='cas' width="1000" height="500">浏览器不支持canvas，请更新浏览器后再浏览</canvas>
+</div>
+<script>
+let canvas = document.getElementById("cas"),
+    ctx = canvas.getContext("2d"),
+    vpx = canvas.width/2,
+    vpy = canvas.height/2,
+    Radius = 250,//整体大球的坐标
+    LayerBallNum = 360 / 15,// 横向
+    LayerIntervalUp = 360 / 15;
+    balls = [];
+let angleX = Math.PI/100; //默认X偏移弧度
+let angleY = Math.PI/100; //默认Y偏移弧度
+let maxAngleX = 0.05;//最大X偏移弧度
+let maxAngleY = 0.05;//最大Y偏移弧度
+let attenuation = 0.0001; //衰减速度
+let level = 1; //灵敏度等级
+let mouseDown = false; //鼠标按下标识
+
+class Animation{
+    constructor(){
+        this.x = angleX;
+        this.y = angleY;
+        this.isrunning = false;
+        let num = LayerIntervalUp / 2;                          //layer 的数目    //假定每一层 间隔30  画上半球
+        for (let i = 0; i <=num; i++) {
+            let l = new layer(i, 1);
+            l.draw();
+            let l2 = new layer(i, -1);
+            l2.draw();
+        }
+        this.animate();
+        this.addListenEvent();
+    }
+    updatePos(x,y){
+        this.x = x;
+        this.y = y;
+    }
+    start(x,y){
+        this.isrunning = true;
+        this.x = x;
+        this.y = y;
+        this.animate();
+    }
+    stop(){
+        this.isrunning = false;
+    }
+    addListenEvent(){//监听事件
+        let that = this;
+        window.addEventListener("mousemove" , function(event){
+            if(mouseDown){
+                let startX = that.x;
+                let startY = that.y;
+                //计算x和y的偏移
+                let x = event.clientX-startX;
+                let y = event.clientY-startY;
+                angleY = -Math.atan(x/Radius)*level;
+                angleX = -Math.atan(y/Radius)*level;
+                //组织旋转过快
+                if(Math.abs(angleX)>maxAngleX){
+                    angleX = angleX>0?maxAngleX:-maxAngleX;
+                }
+                if(Math.abs(angleY)>maxAngleY){
+                    angleY = angleY>0?maxAngleY:-maxAngleX;
+                }
+                that.updatePos(event.clientX,event.clientY);
+            }
+
+        });
+        window.addEventListener("mousedown" , function(event){
+            mouseDown = true;
+            let x = event.clientX;
+            let y = event.clientY;
+            that.start(x,y);
+        });
+        window.addEventListener("mouseup" , function(event){
+            mouseDown = false;
+        });
+    }
+    animate(){
+        ctx.clearRect(0,0,canvas.width , canvas.height);
+        rotateX();
+        rotateY();
+        rotateZ();
+
+        if(!mouseDown){//鼠标弹起，旋转幅度逐渐衰减
+            if(angleY){//Y不为零时
+                if(angleY<0){
+                    angleY+=attenuation
+                }else{
+                    angleY-=attenuation
+                }
+                if(Math.abs(angleY)<attenuation){
+                    angleY = 0;
+                }
+            }
+            if(angleX){//X不为零时
+                if(angleX<0){
+                    angleX+=attenuation
+                }else{
+                    angleX-=attenuation
+                }
+                if(Math.abs(angleX)<attenuation){
+                    angleX = 0;
+                }
+            }
+            if(angleX===0&&angleY===0){//两个角度都为0 则停止
+                this.stop();
+            }
+            console.log(angleY,angleX);
+        }
+
+        for(let i=0;i<balls.length;i++){
+            balls[i].paint();
+        }
+        if(this.isrunning) {
+            if("requestAnimationFrame" in window){
+                requestAnimationFrame(this.animate.bind(this));
+            }
+            else if("webkitRequestAnimationFrame" in window){
+                webkitRequestAnimationFrame(this.animate.bind(this));
+            }
+            else if("msRequestAnimationFrame" in window){
+                msRequestAnimationFrame(this.animate.bind(this));
+            }
+            else if("mozRequestAnimationFrame" in window){
+                mozRequestAnimationFrame(this.animate.bind(this));
+            }
+        }
+    }
+}
+
+class layer{
+    constructor(num, up) {
+        this.radius = Math.sqrt(Math.pow(Radius,2) - Math.pow(Radius * Math.cos(num * Math.PI * 2 / LayerBallNum), 2))
+        this.x = 0;
+        this.y = 0;
+        this.up = up;
+    }
+    setBalls(radius) {
+        for(let i=0; i<LayerBallNum; i++){
+            let angle =  2 * Math.PI / LayerBallNum * i;
+            let b = new ball(radius * Math.cos(angle), radius * Math.sin(angle), this.up * Math.sqrt(Math.pow(Radius, 2) - Math.pow(radius, 2)), 1.5);
+            b.paint();
+            balls.push(b);
+        }
+
+    }
+    draw () {
+        ctx.beginPath();
+        ctx.arc(vpx, vpy, this.radius , 0, 2*Math.PI, true);
+        ctx.strokeStyle = "#FFF";
+        ctx.stroke();
+        this.setBalls(this.radius);
+    }
+}
+class ball{
+    constructor(x , y , z , r){
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.r = r;
+        this.width = 2*r;
+    }
+    paint(){
+        let fl = 450 //焦距
+        ctx.save();
+        ctx.beginPath();
+        let scale = fl / (fl - this.z);
+        let alpha = (this.z+Radius)/(2*Radius);
+        ctx.arc(vpx + this.x, vpy + this.y, this.r*scale , 0 , 2*Math.PI , true);
+        ctx.fillStyle = "rgba(255,255,255,"+(alpha+0.5)+")";
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+
+function rotateX(){
+    let cos = Math.cos(angleX);
+    let sin = Math.sin(angleX);
+    for(let i=0;i<balls.length;i++){
+        let y1 = balls[i].y * cos - balls[i].z * sin;
+        let z1 = balls[i].z * cos + balls[i].y * sin;
+        balls[i].y = y1;
+        balls[i].z = z1;
+    }
+}
+
+function rotateY(){
+    let cos = Math.cos(angleY);
+    let sin = Math.sin(angleY);
+    for(let i=0;i<balls.length;i++){
+        let x1 = balls[i].x * cos - balls[i].z * sin;
+        let z1 = balls[i].z * cos + balls[i].x * sin;
+        balls[i].x = x1;
+        balls[i].z = z1;
+    }
+}
+
+function rotateZ(){
+    let cos = Math.cos(angleY);
+    let sin = Math.sin(angleY);
+    for(let i=0;i<balls.length;i++){
+        let x1 = balls[i].x * cos - balls[i].y * sin;
+        let y1 = balls[i].y * cos + balls[i].x * sin;
+        balls[i].x = x1;
+        balls[i].y = y1;
+    }
+}
+
+
+let animation = new Animation();
+animation.animate();
+
+</script>
+</body>
